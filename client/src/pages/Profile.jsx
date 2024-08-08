@@ -1,10 +1,10 @@
 import { useSelector } from "react-redux";
-import { useRef, useState, useEffect, useCallback } from "react";
+import { useRef, useState, useEffect } from "react";
 import {
-  getStorage,
-  uploadBytesResumable,
-  ref,
   getDownloadURL,
+  getStorage,
+  ref,
+  uploadBytesResumable,
 } from "firebase/storage";
 import { app } from "../firebase";
 import { useDispatch } from "react-redux";
@@ -15,6 +15,7 @@ import {
   deleteUserStart,
   deleteUserSuccess,
   deleteUserFailure,
+  signOut,
 } from "../redux/user/userSlice";
 
 export default function Profile() {
@@ -27,13 +28,16 @@ export default function Profile() {
   const [updateSuccess, setUpdateSuccess] = useState(false);
 
   const { currentUser, loading, error } = useSelector((state) => state.user);
-
-  const handleFileUpload = useCallback(async (image) => {
+  useEffect(() => {
+    if (image) {
+      handleFileUpload(image);
+    }
+  }, [image]);
+  const handleFileUpload = async (image) => {
     const storage = getStorage(app);
     const fileName = new Date().getTime() + image.name;
     const storageRef = ref(storage, fileName);
     const uploadTask = uploadBytesResumable(storageRef, image);
-
     uploadTask.on(
       "state_changed",
       (snapshot) => {
@@ -45,22 +49,12 @@ export default function Profile() {
         setImageError(true);
       },
       () => {
-        getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
-          setFormData((prevData) => ({
-            ...prevData,
-            profilePicture: downloadURL,
-          }));
-        });
+        getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) =>
+          setFormData({ ...formData, profilePicture: downloadURL })
+        );
       }
     );
-  }, []);
-
-  useEffect(() => {
-    if (image) {
-      handleFileUpload(image);
-    }
-  }, [image, handleFileUpload]);
-
+  };
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.id]: e.target.value });
   };
@@ -105,6 +99,14 @@ export default function Profile() {
     }
   };
 
+  const handleSignOut = async () => {
+    try {
+      await fetch("/api/auth/signout");
+      dispatch(signOut());
+    } catch (error) {
+      console.log(error);
+    }
+  };
   return (
     <div className="p-3 max-w-lg mx-auto">
       <h1 className="text-3xl font-semibold text-center my-7">Profile</h1>
@@ -116,10 +118,10 @@ export default function Profile() {
           accept="image/*"
           onChange={(e) => setImage(e.target.files[0])}
         />
-        {/*
-         Firebase storage rules
-         allow read;
-      allow write: if 
+        {/* 
+      firebase storage rules:  
+      allow read;
+      allow write: if
       request.resource.size < 2 * 1024 * 1024 &&
       request.resource.contentType.matches('image/.*') */}
         <img
@@ -142,16 +144,16 @@ export default function Profile() {
           )}
         </p>
         <input
-          type="text"
           defaultValue={currentUser.username}
+          type="text"
           id="username"
           placeholder="Username"
           className="bg-slate-100 rounded-lg p-3"
           onChange={handleChange}
         />
         <input
-          type="email"
           defaultValue={currentUser.email}
+          type="email"
           id="email"
           placeholder="Email"
           className="bg-slate-100 rounded-lg p-3"
@@ -175,11 +177,13 @@ export default function Profile() {
         >
           Delete Account
         </span>
-        <span className="text-red-700 cursor-pointer">Sign Out</span>
+        <span onClick={handleSignOut} className="text-red-700 cursor-pointer">
+          Sign out
+        </span>
       </div>
       <p className="text-red-700 mt-5">{error && "Something went wrong!"}</p>
       <p className="text-green-700 mt-5">
-        {updateSuccess && "User is Updated successfully!"}
+        {updateSuccess && "User is updated successfully!"}
       </p>
     </div>
   );
